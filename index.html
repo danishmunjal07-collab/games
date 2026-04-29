@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Science Quest FINAL</title>
+
+<style>
+body{margin:0;background:#0b132b;color:white;font-family:Verdana;text-align:center}
+canvas{background:#1c2541;display:block;margin:auto;border:2px solid white}
+
+.screen{
+position:absolute;top:50%;left:50%;
+transform:translate(-50%,-50%);
+background:#3a506b;padding:20px;border-radius:10px
+}
+
+#ui{display:none;position:absolute;top:10px;left:10px}
+button{padding:6px;margin:5px;border:none;border-radius:6px;background:#5bc0be}
+
+/* confetti */
+.confetti{position:fixed;width:6px;height:6px;top:0;animation:fall 2s linear;}
+@keyframes fall{to{transform:translateY(100vh)}}
+
+/* leaderboard */
+#list li{
+padding:10px;
+margin:6px;
+border-radius:8px;
+background:#1c2541;
+animation:fadeIn 0.5s ease;
+}
+@keyframes fadeIn{
+from{opacity:0;transform:translateY(10px)}
+to{opacity:1;transform:translateY(0)}
+}
+.rank1{background:gold;color:black;box-shadow:0 0 15px gold;}
+.me{border:2px solid cyan;box-shadow:0 0 10px cyan;}
+</style>
+</head>
+
+<body>
+
+<h2>Science Quest 🎮</h2>
+
+<!-- MENU -->
+<div id="menu" class="screen">
+<h3>Main Menu</h3>
+<button onclick="startGame()">Start Game</button>
+<button onclick="showLB()">Leaderboard</button>
+</div>
+
+<!-- UI -->
+<div id="ui">
+Score:<span id="score">0</span> |
+Lives:<span id="lives">3</span> |
+Coins:<span id="coins">0</span> |
+Time:<span id="time">12</span><br>
+
+<button onclick="use5050()">50-50</button>
+<button onclick="skip()">Skip</button>
+<button onclick="freeze()">Freeze</button>
+</div>
+
+<!-- QUESTION -->
+<div id="qBox" class="screen" style="display:none">
+<h3 id="qText"></h3>
+<div id="opts"></div>
+</div>
+
+<!-- END -->
+<div id="endScreen" class="screen" style="display:none">
+<h2 id="endText"></h2>
+<p id="final"></p>
+<p id="medal"></p>
+</div>
+
+<!-- NAME POPUP -->
+<div id="namePopup" class="screen" style="display:none">
+<h3>Enter Your Name</h3>
+<input id="finalName">
+<br><br>
+<button onclick="submitScore()">Submit</button>
+</div>
+
+<!-- LEADERBOARD -->
+<div id="leaderboard" class="screen" style="display:none">
+<h2>🏆 Leaderboard</h2>
+<ul id="list" style="list-style:none;padding:0"></ul>
+<button onclick="clearLB()">Clear</button>
+<button onclick="closeLB()">Close</button>
+</div>
+
+<canvas id="game" width="800" height="400"></canvas>
+
+<script>
+
+// UI ELEMENTS (FIX)
+let scoreEl=document.getElementById("score");
+let livesEl=document.getElementById("lives");
+let coinsEl=document.getElementById("coins");
+let timeEl=document.getElementById("time");
+
+// GAME
+let canvas=document.getElementById("game");
+let ctx=canvas.getContext("2d");
+
+let player={x:50,y:300,vy:0};
+let gravity=0.8,jumpPower=-13;
+
+let obstacles=[],coinsArr=[];
+
+let score=0,lives=3,coins=0;
+let running=false,paused=false,freezeTime=false;
+
+let qi=0,time=12,timer;
+let finalMedal="Bronze";
+
+// QUESTIONS
+let Qs=[
+{q:"Unit of force?",o:["Newton","Joule","Watt","Pascal"],a:0},
+{q:"Sun is?",o:["Star","Planet","Moon","Comet"],a:0},
+{q:"Gas we breathe?",o:["Oxygen","CO2","Nitrogen","Hydrogen"],a:0},
+{q:"Water formula?",o:["H2O","CO2","O2","NaCl"],a:0},
+{q:"Earth is?",o:["Planet","Star","Moon","Asteroid"],a:0},
+{q:"Energy unit?",o:["Joule","Volt","Amp","Watt"],a:0},
+{q:"Boiling point?",o:["100°C","0°C","50°C","200°C"],a:0},
+{q:"Speed=?",o:["Distance/Time","Time/Distance","Mass/Volume","Force/Area"],a:0},
+{q:"Lens for myopia?",o:["Concave","Convex","Plane","None"],a:0},
+{q:"Pressure unit?",o:["Pascal","Newton","Volt","Joule"],a:0},
+{q:"Heart pumps?",o:["Blood","Air","Water","Food"],a:0},
+{q:"Plants make food by?",o:["Photosynthesis","Respiration","Digestion","Absorption"],a:0},
+{q:"Earth revolves around?",o:["Sun","Moon","Mars","Jupiter"],a:0},
+{q:"Electric unit?",o:["Ampere","Volt","Ohm","All"],a:3},
+{q:"Light travels?",o:["Straight","Curve","Circle","Random"],a:0}
+];
+
+let boss={q:"Who gave laws of motion?",o:["Newton","Einstein","Tesla","Galileo"],a:0};
+
+// START
+function startGame(){
+menu.style.display="none";
+ui.style.display="block";
+running=true;
+loop();
+}
+
+// LOOP
+function loop(){
+requestAnimationFrame(loop);
+if(!running)return;
+
+if(!paused){
+player.vy+=gravity;
+player.y+=player.vy;
+if(player.y>300){player.y=300;player.vy=0}
+
+// obstacles
+for(let i=0;i<obstacles.length;i++){
+let o=obstacles[i];
+o.x-=4;
+if(collide(player,o)){ask();obstacles.splice(i,1);break;}
+}
+
+// coins (FIXED)
+for(let i=0;i<coinsArr.length;i++){
+let c=coinsArr[i];
+c.x-=4;
+
+if(collide(player,c)){
+coins+=1;
+score+=5;
+coinsArr.splice(i,1);
+i--;
+showCoinPopup(player.x,player.y);
+}
+}
+}
+
+// draw
+ctx.clearRect(0,0,800,400);
+
+ctx.fillStyle="cyan";
+ctx.fillRect(player.x,player.y,30,30);
+
+ctx.fillStyle="red";
+obstacles.forEach(o=>ctx.fillRect(o.x,o.y,30,30));
+
+ctx.fillStyle="yellow";
+coinsArr.forEach(c=>ctx.fillRect(c.x,c.y,20,20));
+
+// UI update (FIXED)
+scoreEl.innerText=score;
+livesEl.innerText=lives;
+coinsEl.innerText=coins;
+timeEl.innerText=time;
+}
+
+// spawn
+setInterval(()=>{if(running&&!paused&&!freezeTime)obstacles.push({x:800,y:300})},2000);
+setInterval(()=>{if(running&&!paused&&!freezeTime)coinsArr.push({x:800,y:200})},1500);
+
+// collision
+function collide(a,b){
+return a.x<b.x+30&&a.x+30>b.x&&a.y<b.y+30&&a.y+30>b.y;
+}
+
+// QUESTIONS
+function ask(){
+if(qi>=Qs.length){bossQ();return;}
+paused=true;
+time=12;
+
+clearInterval(timer);
+timer=setInterval(()=>{
+if(!freezeTime){
+time--;
+if(time<=0){lives--;closeQ();}
+}
+},1000);
+
+let q=Qs[qi];
+qBox.style.display="block";
+qText.innerText=q.q;
+
+opts.innerHTML="";
+q.o.forEach((t,i)=>{
+let b=document.createElement("button");
+b.innerText=t;
+b.onclick=()=>answer(i);
+opts.appendChild(b);
+});
+}
+
+function answer(i){
+clearInterval(timer);
+if(i===Qs[qi].a){score+=20;confetti();}
+else lives--;
+closeQ();
+}
+
+function closeQ(){
+qi++;
+qBox.style.display="none";
+paused=false;
+if(lives<=0)end(false);
+}
+
+// boss
+function bossQ(){
+paused=true;
+qBox.style.display="block";
+qText.innerText="👾 FINAL: "+boss.q;
+
+opts.innerHTML="";
+boss.o.forEach((t,i)=>{
+let b=document.createElement("button");
+b.innerText=t;
+b.onclick=()=>bossAns(i);
+opts.appendChild(b);
+});
+}
+
+function bossAns(i){
+if(i===boss.a){score+=100;confetti();end(true);}
+else end(false);
+}
+
+// END
+function end(win){
+running=false;
+finalMedal=getMedal(score);
+
+endScreen.style.display="block";
+endText.innerText=win?"YOU WIN":"GAME OVER";
+final.innerText="Score: "+score;
+medal.innerText="Medal: "+finalMedal;
+
+setTimeout(()=>{namePopup.style.display="block";},800);
+}
+
+// submit
+function submitScore(){
+let name=document.getElementById("finalName").value.trim();
+if(!name) name="Player";
+saveScore(name,score,finalMedal);
+namePopup.style.display="none";
+}
+
+// medal
+function getMedal(s){
+if(s>=250)return "💎 Diamond";
+if(s>=180)return "🥇 Gold";
+if(s>=120)return "🥈 Silver";
+return "🥉 Bronze";
+}
+
+// leaderboard
+function saveScore(name,score,medal){
+let data=[];
+try{data=JSON.parse(localStorage.getItem("lb"))||[];}catch{data=[];}
+
+let timeStr=new Date().toLocaleString();
+data.push({name,score,medal,time:timeStr});
+data.sort((a,b)=>b.score-a.score);
+data=data.slice(0,5);
+
+localStorage.setItem("lb",JSON.stringify(data));
+localStorage.setItem("lastPlayer",name);
+}
+
+function showLB(){
+let data=[];
+try{data=JSON.parse(localStorage.getItem("lb"))||[];}catch{data=[];}
+
+let last=localStorage.getItem("lastPlayer");
+let html="";
+
+if(data.length===0){
+html="<li>No scores yet</li>";
+}else{
+data.forEach((p,i)=>{
+let crown=i===0?"👑 ":"";
+let cls="";
+if(i===0) cls+="rank1 ";
+if(p.name===last) cls+="me";
+
+html+=`
+<li class="${cls}">
+${crown}#${i+1} ${p.name}<br>
+💯 ${p.score} | ${p.medal}<br>
+🕒 ${p.time}
+</li>`;
+});
+}
+
+list.innerHTML=html;
+leaderboard.style.display="block";
+}
+
+function clearLB(){localStorage.removeItem("lb");showLB();}
+function closeLB(){leaderboard.style.display="none";}
+
+// lifelines
+function use5050(){
+let btns=opts.children;
+let correct=Qs[qi]?.a ?? boss.a;
+let removed=0;
+for(let i=0;i<btns.length;i++){
+if(i!==correct && removed<2){
+btns[i].style.display="none";
+removed++;
+}
+}
+}
+function skip(){closeQ();}
+function freeze(){freezeTime=true;setTimeout(()=>freezeTime=false,5000);}
+
+// jump
+window.onkeydown=e=>{
+if(e.code==="Space" && player.y>=300)player.vy=jumpPower;
+};
+
+// confetti
+function confetti(){
+for(let i=0;i<60;i++){
+let d=document.createElement("div");
+d.className="confetti";
+d.style.left=Math.random()*100+"vw";
+d.style.background=`hsl(${Math.random()*360},100%,50%)`;
+document.body.appendChild(d);
+setTimeout(()=>d.remove(),2000);
+}
+}
+
+// coin popup
+function showCoinPopup(x,y){
+let d=document.createElement("div");
+d.innerText="+1 🪙";
+d.style.position="fixed";
+d.style.left=x+"px";
+d.style.top=y+"px";
+d.style.color="yellow";
+document.body.appendChild(d);
+setTimeout(()=>d.remove(),800);
+}
+
+</script>
+</body>
+</html>
